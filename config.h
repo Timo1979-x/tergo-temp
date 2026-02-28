@@ -14,7 +14,7 @@
 
 //#define SERIAL_DEBUG
 
-#define WS2812_PIO_USE_PIO1
+// #define WS2812_PIO_USE_PIO1
 
 /*
  * Feature disable options
@@ -37,13 +37,9 @@
 // #define I2C1_SDA_PIN GP2
 // #define I2C1_SCL_PIN GP3
 
-#define OLED_BRIGHTNESS 64
 #define I2C_DRIVER I2CD0
 #define I2C1_SDA_PIN GP16
 #define I2C1_SCL_PIN GP17
-#define OLED_DISPLAY_128X32
-#undef OLED_TIMEOUT
-#define OLED_TIMEOUT 20000
 
 // Выкидывать в отладочную QMK console сообщения о частоте сканирования матрицы кнопок:
 // #define DEBUG_MATRIX_SCAN_RATE
@@ -84,3 +80,9 @@
 
 #define RAW_USAGE_PAGE 0xFF60
 #define RAW_USAGE_ID 0x61
+
+
+// Длительность показа лого в миллисекундах
+#define SHOW_LOGO_DURATION 3000
+#undef QUANTUM_PAINTER_DISPLAY_TIMEOUT
+#define QUANTUM_PAINTER_DISPLAY_TIMEOUT 10000

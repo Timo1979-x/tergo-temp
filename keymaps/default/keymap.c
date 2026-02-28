@@ -8,11 +8,15 @@ enum my_keycodes {
     EK_LOGO = SAFE_RANGE // KEYCODE для показа логотипа на дисплее и выдачи в отладочную консоль всякой информации
 };
 
-// Переменные для поддержки функционала Double shift tap -> CAPS LOCK. См. реализацию в process_record_user
-static uint16_t shift_timer = 0;
-static bool shift_double_tapped = false;
+enum {
+    TD_SHIFT_CAPS
+};
 
-// Переменная, где будет храниться текущая раскладка (0 - EN, 1 - RU и т.д.)
+tap_dance_action_t tap_dance_actions[] = {
+    [TD_SHIFT_CAPS] = ACTION_TAP_DANCE_DOUBLE(KC_LSFT, KC_CAPS)
+};
+
+// Переменная, где будет храниться текущая раскладка
 char os_layout[] = "??";
 
 enum layer_number {
@@ -24,8 +28,8 @@ enum layer_number {
 char* get_current_layer_name(void) {
     switch (get_highest_layer(layer_state)) {
         case _LAYER_MAIN: return "L1";
-        case _LAYER_ALTERNATIVE: return "L2_";
-        case _LAYER_CONTROL: return "L3_";
+        case _LAYER_ALTERNATIVE: return "L2";
+        case _LAYER_CONTROL: return "L3";
         default: return "L?";
     }
 }
@@ -41,7 +45,8 @@ char* get_current_layer_name(void) {
 #define KC_QTSH  RSFT_T(KC_QUOT)
 #define KC_SLSF  RSFT_T(KC_LSCR)
 #define KC_NLCT  RCTL_T(KC_LNUM)
-#define KC_ETAL  RALT_T(KC_ENT) 
+#define KC_ETAL  RALT_T(KC_ENT)
+#define TD_CPS1 TD(TD_SHIFT_CAPS)
 
 // Раскладка Jiran, почти оригинальная
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -51,7 +56,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     //+--------+--------+--------+--------+--------+--------+                 +--------+--------+--------+--------+--------+--------+
         KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,                      KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_LBRC,
     //+--------+--------+--------+--------+--------+--------+                 +--------+--------+--------+--------+--------+--------+
-        KC_LSFT, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,                      KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN, KC_QTSH,
+        TD_CPS1, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,                      KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN, KC_QTSH,
     //+--------+--------+--------+--------+--------+--------+                 +--------+--------+--------+--------+--------+--------+
         KC_LCTL, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,                      KC_N,    KC_M,    KC_COMM, KC_DOT,  KC_SLSH, KC_BSCT,
     //+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+
@@ -65,7 +70,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     //+--------+--------+--------+--------+--------+--------+                 +--------+--------+--------+--------+--------+--------+
         KC_TAB,  _______, KC_HOME, TO_CTRL, KC_PGUP, TO_CTRL,                   TO_CTRL, KC_PGUP, TO_CTRL, KC_HOME, KC_INS,  KC_DEL,
     //+--------+--------+--------+--------+--------+--------+                 +--------+--------+--------+--------+--------+--------+
-        KC_LSFT, _______, KC_LEFT, KC_UP,   KC_RGHT, _______,                   _______, KC_LEFT, KC_UP,   KC_RGHT, KC_PSCR, KC_SLSF,
+        TD_CPS1, _______, KC_LEFT, KC_UP,   KC_RGHT, _______,                   _______, KC_LEFT, KC_UP,   KC_RGHT, KC_PSCR, KC_SLSF,
     //+--------+--------+--------+--------+--------+--------+                 +--------+--------+--------+--------+--------+--------+
         KC_LCTL, _______, KC_END,  KC_DOWN, KC_PGDN, _______,                   _______, KC_PGDN, KC_DOWN, KC_END,  KC_PAUS, KC_NLCT,
     //+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+--------+
@@ -91,16 +96,15 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 
 void my_backlight_enable(void) {
     // Стандартные функции изменения подсветки пишут в EEPROM/FLASH, поэтому будем управлять подсветкой напрямую
-    // backlight_enable();
-    backlight_config.enable = 1;
+    // backlight_config.enable = 1;
     // Применяем уровень яркости к железу (если выключено - 0)
-    backlight_set(backlight_config.level);
+    uint8_t lvl = backlight_config.enable ? backlight_config.level : BACKLIGHT_DEFAULT_LEVEL;
+    backlight_set(lvl ? lvl : 1);
 }
 
 void my_backlight_disable(void) {
     // Стандартные функции изменения подсветки пишут в EEPROM/FLASH, поэтому будем управлять подсветкой напрямую
-    // backlight_disable();
-    backlight_config.enable = 0;
+    // backlight_config.enable = 0;
     // Применяем уровень яркости к железу (если выключено - 0)
     backlight_set(0);
 }
@@ -114,39 +118,7 @@ void keyboard_post_init_user(void) {
     keyboard_post_init_user_display();
 }
 
-void keyboard_post_init_kb(void) {
-    keyboard_post_init_user();
-} 
-
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    // Функционал double shift -> CAPS LOCK. Ловим нажатие левого или правого Shift
-    if (keycode == KC_LSFT || keycode == KC_RSFT) {
-        if (record->event.pressed) {
-            // Проверяем, было ли предыдущее нажатие менее 250 мс назад
-            if (shift_timer != 0 && timer_elapsed(shift_timer) < 250) {
-                tap_code(KC_CAPS); // Включаем/выключаем Caps Lock
-                shift_timer = 0;   // Сбрасываем таймер
-                shift_double_tapped = true; // Запоминаем, что это двойной клик
-                return false;      // Блокируем обычное срабатывание Shift
-            } else {
-                shift_timer = timer_read(); // Запускаем таймер первого нажатия
-                shift_double_tapped = false;
-            }
-        } else { // При отпускании клавиши
-            if (shift_double_tapped) {
-                shift_double_tapped = false;
-                return false; // Блокируем событие отпускания для двойного клика
-            }
-        }
-    } else {
-        // Если была нажата любая другая кнопка — сбрасываем таймер.
-        // Это нужно, чтобы быстрое нажатие "Shift -> Буква -> Shift" не включило Caps.
-        if (record->event.pressed) {
-            shift_timer = 0;
-        }
-    }
-    // Закончили с double shift
-
     switch (keycode) {
         case EK_LOGO:
             if (!record->event.pressed) {
@@ -175,7 +147,7 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
     if (data[0] == 0x42) {
         os_layout[0] = data[1];
         os_layout[1] = data[2];
-        display_on(true);
+        // display_on(true);
         if((os_layout[0] == 'E' && os_layout[1] == 'N') || (os_layout[0] == 'U' && os_layout[1] == 'S')) {
             // Для английского языка выключим подсветку
             my_backlight_disable();
